@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Admin CRUD Panel</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://unpkg.com/alpinejs"></script>
+</head>
+<body class="bg-gray-50 py-10 min-h-screen">
+  <div x-data="crudAdmin()" x-init="init()" class="max-w-3xl mx-auto bg-white border border-gray-200 shadow-sm p-6 rounded">
+    <h1 class="text-xl font-semibold mb-6 text-center text-slate-700">Fjalor Admin Panel</h1>
+
+    <!-- Server response -->
+    <div x-show="response.message" class="mb-4">
+      <div class="bg-stone-100 text-stone-700 border border-stone-300 p-2 rounded" x-text="response.message"></div>
+    </div>
+
+    <!-- Table -->
+    <div x-show="paginatedSorted().length">
+      <table class="w-full border border-gray-200 table-auto">
+        <thead class="bg-gray-100 text-slate-600 text-sm">
+          <tr>
+            <th class="px-3 py-2 cursor-pointer text-left" @click="toggleSort('key')">
+              Fjalë <span x-show="sort.column === 'key'" x-text="sort.asc ? '↑' : '↓'"></span>
+            </th>
+            <th class="px-3 py-2 cursor-pointer text-left" @click="toggleSort('value')">
+              Anglisht <span x-show="sort.column === 'value'" x-text="sort.asc ? '↑' : '↓'"></span>
+            </th>
+            <th class="px-3 py-2 text-left">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="([k, v], i) in paginatedSorted()" :key="i">
+            <tr class="border-t border-gray-200">
+              <td class="px-3 py-2 font-mono text-sm text-slate-700" x-text="k"></td>
+              <td class="px-3 py-2">
+                <input type="text" x-model="all[k]" class="w-full px-2 py-1 border border-gray-300 rounded text-sm text-slate-700"/>
+              </td>
+              <td class="px-3 py-2 space-x-2">
+                <button @click="update(k)" class="bg-zinc-100 text-zinc-700 px-3 py-1 rounded text-sm hover:bg-zinc-200">Update</button>
+                <button @click="del(k)" class="bg-zinc-100 text-zinc-700 px-3 py-1 rounded text-sm hover:bg-zinc-200">Delete</button>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+
+      <!-- Pagination -->
+      <div class="flex justify-between items-center mt-4">
+        <button @click="currentPage = Math.max(1, currentPage - 1)" class="px-3 py-1 border rounded bg-stone-100 hover:bg-stone-200 text-sm text-stone-700">Previous</button>
+        <span class="text-sm text-slate-600">Page <span x-text="currentPage"></span> of <span x-text="totalPages()"></span></span>
+        <button @click="currentPage = Math.min(totalPages(), currentPage + 1)" class="px-3 py-1 border rounded bg-stone-100 hover:bg-stone-200 text-sm text-stone-700">Next</button>
+      </div>
+    </div>
+
+    <!-- Create Form -->
+    <div class="mt-6 pt-4 border-t border-gray-200">
+      <h2 class="text-base font-medium text-slate-700 mb-2">Create New Entry</h2>
+      <div class="flex flex-col space-y-2 mb-4">
+        <input x-model="newKey" type="text" class="px-3 py-2 border border-gray-300 rounded text-sm" placeholder="New key" />
+        <input x-model="newValue" type="text" class="px-3 py-2 border border-gray-300 rounded text-sm" placeholder="New value" />
+        <button @click="create()" class="bg-zinc-100 text-zinc-700 px-4 py-2 rounded text-sm hover:bg-zinc-200">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function crudAdmin() {
+      return {
+        all: {},
+        newKey: '',
+        newValue: '',
+        response: {},
+        currentPage: 1,
+        itemsPerPage: 5,
+        sort: { column: 'key', asc: true },
+
+        init() {
+          this.fetchAll();
+        },
+        fetchAll() {
+          fetch('http://localhost:8080/', {
+            method: 'POST',
+            body: 'DUMP'
+          })
+          .then(res => res.json())
+          .then(data => this.all = data)
+          .catch(() => this.response = { message: 'Failed to load data' });
+        },
+        create() {
+          const payload = `CREATE ${this.newKey} ${this.newValue}`;
+          fetch('http://localhost:8080/', {
+            method: 'POST',
+            body: payload
+          })
+          .then(res => res.json())
+          .then(data => {
+            this.response = data;
+            this.newKey = '';
+            this.newValue = '';
+            this.fetchAll();
+          });
+        },
+        update(key) {
+          const payload = `UPDATE ${key} ${this.all[key]}`;
+          fetch('http://localhost:8080/', {
+            method: 'POST',
+            body: payload
+          })
+          .then(res => res.json())
+          .then(data => {
+            this.response = data;
+            this.fetchAll();
+          });
+        },
+        del(key) {
+          const payload = `DELETE ${key}`;
+          fetch('http://localhost:8080/', {
+            method: 'POST',
+            body: payload
+          })
+          .then(res => res.json())
+          .then(data => {
+            this.response = data;
+            this.fetchAll();
+          });
+        },
+        toggleSort(col) {
+          if (this.sort.column === col) {
+            this.sort.asc = !this.sort.asc;
+          } else {
+            this.sort.column = col;
+            this.sort.asc = true;
+          }
+        },
+        sortedEntries() {
+          return Object.entries(this.all).sort(([ak, av], [bk, bv]) => {
+            const a = this.sort.column === 'key' ? ak : av;
+            const b = this.sort.column === 'key' ? bk : bv;
+            return this.sort.asc
+              ? a.toString().localeCompare(b.toString())
+              : b.toString().localeCompare(a.toString());
+          });
+        },
+        paginatedSorted() {
+          const start = (this.currentPage - 1) * this.itemsPerPage;
+          return this.sortedEntries().slice(start, start + this.itemsPerPage);
+        },
+        totalPages() {
+          return Math.ceil(Object.keys(this.all).length / this.itemsPerPage);
+        }
+      };
+    }
+  </script>
+</body>
+</html>
